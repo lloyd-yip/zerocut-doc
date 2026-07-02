@@ -60,17 +60,24 @@
   .spine{border-radius:16px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px 0}
   .spine.back{background:linear-gradient(180deg, rgba(255,109,90,.22), rgba(255,109,90,.05));border:1px solid rgba(255,109,90,.4)}
   .spine.front{background:linear-gradient(180deg, rgba(52,211,153,.2), rgba(52,211,153,.05));border:1px solid rgba(52,211,153,.4)}
-  .spine .slabel{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:700;font-size:13px;letter-spacing:1px;white-space:nowrap;position:sticky;top:20px}
+  .spine .slabel{writing-mode:vertical-rl;font-weight:800;font-size:16px;letter-spacing:.5px;white-space:nowrap;position:sticky;top:24px;text-align:center}
+  .spine .slabel .ic{writing-mode:horizontal-tb;font-size:18px;display:block;margin-bottom:8px}
   .spine.back .slabel{color:var(--n8n)} .spine.front .slabel{color:var(--air)}
   .spine .snodes{position:absolute;top:0;bottom:0;width:2px;left:50%;transform:translateX(-50%);background:repeating-linear-gradient(180deg, currentColor 0 4px, transparent 4px 16px);opacity:.25;z-index:0}
   .spine.back .snodes{color:var(--n8n)} .spine.front .snodes{color:var(--air)}
   .track{display:flex;flex-direction:column}
-  .spine-mobile{display:none}
+  /* readable horizontal key above the flow — shown on every screen size */
+  .railkey{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;margin-bottom:2px}
+  .railkey .rk{flex:1;min-width:240px;display:flex;gap:10px;align-items:flex-start;border-radius:12px;padding:12px 16px;font-size:13.5px;color:var(--muted)}
+  .railkey .rk b{color:var(--text)}
+  .railkey .rk .ric{font-size:18px;line-height:1.2}
+  .railkey .rk.back{background:rgba(255,109,90,.08);border:1px solid rgba(255,109,90,.35)}
+  .railkey .rk.front{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.35)}
+  .railkey .rk .name{font-weight:700}
+  .railkey .rk.back .name{color:var(--n8n)} .railkey .rk.front .name{color:var(--air)}
   @media(max-width:760px){
     .assembly{grid-template-columns:1fr}
     .spine{display:none}
-    .spine-mobile{display:flex;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:18px;font-size:13px;color:var(--muted)}
-    .spine-mobile b{color:var(--text)}
   }
 
   .stage{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px 18px;}
@@ -266,11 +273,14 @@
     <span class="lg"><span class="dot" style="background:var(--human)"></span>🧍 Human checkpoint</span>
   </div>
 
-  <div class="spine-mobile"><span>⚙️ <b>n8n</b> drives every step (backend spine)</span> · <span>📋 <b>Airtable</b> shows status &amp; holds every approval (frontend spine)</span></div>
+  <div class="railkey">
+    <div class="rk back"><span class="ric">⚙️</span><span><span class="name">n8n — backend spine (left rail).</span> Drives every step in order, from footage to publish, and waits at each checkpoint. The conveyor belt itself.</span></div>
+    <div class="rk front"><span class="ric">📋</span><span><span class="name">Airtable — frontend spine (right rail).</span> Every video is a row; shows what stage it's at and holds every approval. What you actually look at and click.</span></div>
+  </div>
 
   <div class="assembly">
     <!-- LEFT SPINE: n8n -->
-    <div class="spine back"><div class="snodes"></div><div class="slabel">⚙️ n8n · orchestration backbone</div></div>
+    <div class="spine back"><div class="snodes"></div><div class="slabel"><span class="ic">⚙️</span>n8n</div></div>
 
     <!-- MIDDLE TRACK -->
     <div class="track">
@@ -423,7 +433,7 @@
     </div>
 
     <!-- RIGHT SPINE: Airtable -->
-    <div class="spine front"><div class="snodes"></div><div class="slabel">📋 Airtable · status &amp; approvals</div></div>
+    <div class="spine front"><div class="snodes"></div><div class="slabel"><span class="ic">📋</span>Airtable</div></div>
   </div>
 
   <!-- ===== PEOPLE ===== -->
