@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZeroCut — How the Video Machine Works</title>
+<style>
+  :root{
+    --bg:#0f1117; --surface:#171a23; --surface2:#1e222e; --border:#2a2f3e;
+    --text:#e8eaf0; --muted:#a6adc2; --faint:#6b7288;
+    --auto:#4f8ef7; --ai:#a78bfa; --code:#34d399; --human:#fbbf24; --dead:#f87171; --warn:#fb923c; --ok:#34d399;
+    --n8n:#ff6d5a; --air:#34d399;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.65;font-size:15.5px}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 28px 120px}
+  h1{font-size:32px;letter-spacing:-.5px;margin-bottom:8px}
+  h2{font-size:22px;margin:64px 0 10px;letter-spacing:-.3px}
+  h2 .n{color:var(--faint);font-weight:600;margin-right:8px}
+  p{color:var(--muted);margin-bottom:12px}
+  p b, li b, td b{color:var(--text)}
+  a{color:var(--auto);text-decoration:none;border-bottom:1px solid rgba(79,142,247,.35)}
+  a:hover{border-bottom-color:var(--auto)}
+  .meta{color:var(--faint);font-size:13px;margin-bottom:34px}
+  .bigidea{background:linear-gradient(135deg, rgba(79,142,247,.12), rgba(167,139,250,.08));border:1px solid rgba(79,142,247,.35);border-radius:14px;padding:22px 26px;margin:26px 0}
+  .bigidea h3{font-size:17px;margin-bottom:8px}
+  .bigidea p{font-size:15px;color:var(--muted)}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0 6px}
+  .lg{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:5px 12px}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px}
+  .card h4{font-size:15px;margin-bottom:8px}
+  .card p{font-size:14px}
+  .card ul{margin:6px 0 0 18px;color:var(--muted);font-size:14px}
+  .card li{margin:5px 0}
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}
+  th{color:var(--faint);text-align:left;font-weight:600;padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+  td{padding:12px 10px;border-bottom:1px solid var(--border);color:var(--muted);vertical-align:top}
+  .pill{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.5px;border-radius:4px;padding:2px 8px;white-space:nowrap}
+  .pill.ok{background:rgba(52,211,153,.15);color:var(--ok)}
+  .pill.warn{background:rgba(251,146,60,.15);color:var(--warn)}
+  .pill.dead{background:rgba(248,113,113,.15);color:var(--dead)}
+  .pill.keep{background:rgba(79,142,247,.15);color:var(--auto)}
+
+  /* ===== SPINE INTRO DIAGRAM ===== */
+  .spinediagram{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+  @media(max-width:760px){.spinediagram{grid-template-columns:1fr}}
+  .spinecard{border-radius:14px;padding:20px 22px}
+  .spinecard.back{background:linear-gradient(135deg, rgba(255,109,90,.14), rgba(255,109,90,.04));border:1px solid rgba(255,109,90,.4)}
+  .spinecard.front{background:linear-gradient(135deg, rgba(52,211,153,.14), rgba(52,211,153,.04));border:1px solid rgba(52,211,153,.4)}
+  .spinecard h4{font-size:16px;margin-bottom:6px}
+  .spinecard.back h4{color:var(--n8n)} .spinecard.front h4{color:var(--air)}
+  .spinecard .role{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--faint);margin-bottom:10px}
+  .spinecard p{font-size:14px;margin:0}
+
+  /* ===== ASSEMBLY LINE WITH SPINES ===== */
+  .assembly{display:grid;grid-template-columns:60px minmax(0,1fr) 60px;gap:16px;align-items:stretch;margin-top:22px}
+  .spine{border-radius:16px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px 0}
+  .spine.back{background:linear-gradient(180deg, rgba(255,109,90,.22), rgba(255,109,90,.05));border:1px solid rgba(255,109,90,.4)}
+  .spine.front{background:linear-gradient(180deg, rgba(52,211,153,.2), rgba(52,211,153,.05));border:1px solid rgba(52,211,153,.4)}
+  .spine .slabel{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:700;font-size:13px;letter-spacing:1px;white-space:nowrap;position:sticky;top:20px}
+  .spine.back .slabel{color:var(--n8n)} .spine.front .slabel{color:var(--air)}
+  .spine .snodes{position:absolute;top:0;bottom:0;width:2px;left:50%;transform:translateX(-50%);background:repeating-linear-gradient(180deg, currentColor 0 4px, transparent 4px 16px);opacity:.25;z-index:0}
+  .spine.back .snodes{color:var(--n8n)} .spine.front .snodes{color:var(--air)}
+  .track{display:flex;flex-direction:column}
+  .spine-mobile{display:none}
+  @media(max-width:760px){
+    .assembly{grid-template-columns:1fr}
+    .spine{display:none}
+    .spine-mobile{display:flex;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:18px;font-size:13px;color:var(--muted)}
+    .spine-mobile b{color:var(--text)}
+  }
+
+  .stage{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px 18px;}
+  .stage.auto{border-left:4px solid var(--auto)}
+  .stage.ai{border-left:4px solid var(--ai)}
+  .stage.code{border-left:4px solid var(--code)}
+  .stage .tag{position:absolute;top:18px;right:20px;font-size:10.5px;font-weight:700;letter-spacing:.8px}
+  .stage .tag.auto{color:var(--auto)} .stage .tag.ai{color:var(--ai)} .stage .tag.code{color:var(--code)}
+  .stage h4{font-size:17px;margin-bottom:10px;padding-right:120px}
+  .stage .what,.stage .why{font-size:14px;color:var(--muted);margin-bottom:10px}
+  .stage .what b,.stage .why b{color:var(--text)}
+  .stage .why{background:var(--surface2);border-radius:8px;padding:10px 14px}
+  .stage .why:before{content:"Why this step exists — ";color:var(--faint);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px}
+  .spinetouch{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 2px}
+  .st{font-size:11.5px;border-radius:12px;padding:2px 10px;font-weight:600}
+  .st.n8n{background:rgba(255,109,90,.12);color:var(--n8n);border:1px solid rgba(255,109,90,.3)}
+  .st.air{background:rgba(52,211,153,.12);color:var(--air);border:1px solid rgba(52,211,153,.3)}
+  .tools{margin-top:12px;font-size:13.5px;color:var(--muted)}
+  .tools .t{display:block;margin:5px 0;padding-left:14px;position:relative}
+  .tools .t:before{content:"🔧";position:absolute;left:-6px;font-size:11px;top:2px}
+  .tools .t b{color:var(--text)}
+  .conn{display:flex;flex-direction:column;align-items:center;height:36px;justify-content:center}
+  .conn .line{width:2px;flex:1;background:var(--border)}
+  .conn .arr{color:var(--faint);font-size:14px;line-height:1;margin-top:-2px}
+  .gate{display:flex;align-items:flex-start;gap:14px;background:rgba(251,191,36,.06);border:1px dashed rgba(251,191,36,.45);border-radius:14px;padding:18px 22px}
+  .gate.permanent{border-style:solid;border-color:rgba(251,191,36,.7)}
+  .gate .ico{font-size:22px;line-height:1.3}
+  .gate h5{font-size:15px;color:var(--human);margin-bottom:4px}
+  .gate p{font-size:13.5px;color:var(--muted);margin:0 0 6px}
+  .gate .collapse{display:inline-block;font-size:11.5px;color:var(--faint);background:var(--surface2);border-radius:10px;padding:2px 10px}
+  .eject{border:1px solid rgba(248,113,113,.5);background:rgba(248,113,113,.05);border-radius:14px;padding:16px 20px;margin:14px 0 0 46px;position:relative}
+  .eject:before{content:"↳";position:absolute;left:-30px;top:12px;color:var(--dead);font-size:20px}
+  .eject h5{color:var(--dead);font-size:14px;margin-bottom:6px}
+  .eject p{font-size:13.5px;color:var(--muted);margin:0}
+  .loopback{display:flex;align-items:center;gap:14px;border:1px dashed var(--auto);border-radius:14px;padding:18px 22px;margin-top:36px;background:rgba(79,142,247,.05)}
+  .loopback .ico{font-size:22px}
+  .loopback p{font-size:14px;color:var(--muted);margin:0} .loopback b{color:var(--auto)}
+  .weeks{margin-top:14px}
+  .week{display:flex;gap:16px;padding:14px 0;border-bottom:1px solid var(--border)}
+  .week .w{min-width:88px;font-weight:700;font-size:13px;color:var(--auto)}
+  .week p{font-size:14px;margin:0}
+  .qbox{background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.35);border-radius:12px;padding:18px 22px;margin-top:14px}
+  .qbox li{margin:8px 0 8px 18px;color:var(--muted);font-size:14px}
+  .foot{margin-top:60px;color:var(--faint);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+  .toc{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .toc a{color:var(--muted);font-size:12.5px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:4px 12px;border-bottom:1px solid var(--border)}
+  .toc a:hover{color:var(--text);border-color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>ZeroCut</h1>
+  <p style="font-size:17px;color:var(--muted)">Zero-touch video post-production. You record. The machine edits. You approve. It publishes — and learns.</p>
+  <div class="meta">From the Lloyd // Scott call, July 2 2026 · Pressure-tested architecture, v3</div>
+
+  <div class="toc">
+    <a href="#idea">The Big Idea</a>
+    <a href="#spines">The Two Spines</a>
+    <a href="#goals">What We're Building</a>
+    <a href="#kept">What We Kept From the Call</a>
+    <a href="#changes">What Changed From the Call</a>
+    <a href="#flow">The Assembly Line</a>
+    <a href="#people">Who Does What</a>
+    <a href="#tools">The Tools, Explained</a>
+    <a href="#build">The Build Plan</a>
+    <a href="#open">Decisions Still Open</a>
+  </div>
+
+  <!-- ===== BIG IDEA ===== -->
+  <h2 id="idea"><span class="n">1</span>The big idea: every video is a recipe</h2>
+  <div class="bigidea">
+    <h3>🧾 The recipe (we call it "the manifest")</h3>
+    <p>Every video gets one master document — a recipe — that describes everything about it: what was said and exactly when, where every cut happens, which graphic appears at which moment, what music plays, which sound effects hit where. <b>The finished video is always cooked from this recipe by a machine.</b> No human ever hand-edits the final video. If you want something changed, you change the recipe and the machine re-cooks it in minutes — and it comes out exactly the same way every time, plus your change.</p>
+  </div>
+  <p>Why this matters: on the call we imagined AI "figuring out" how to assemble the video from a pile of ingredients. The problem is that a system you want to work 99 times out of 100 can't have an AI improvising at the finish line. So instead: <b>AI writes the recipe, humans approve the recipe, and dumb reliable code cooks it.</b> The creative judgment happens where it's cheap to review (a list of proposals you can approve on your phone), and the execution happens where it's guaranteed to be consistent (code).</p>
+  <p>The other big shift from the call: <b>the goal isn't just editing faster — it's a system that gets better every video.</b> Every published video sends its performance data back (where viewers dropped off, which thumbnail won), and that data tunes the scripting, the graphics choices, and the timing rules. Speed is the feature; the learning loop is the moat.</p>
+
+  <!-- ===== SPINES ===== -->
+  <h2 id="spines"><span class="n">2</span>The two spines that hold the whole thing up</h2>
+  <p>This was your instinct on the call, and it's the right one: nothing here is a pile of disconnected scripts. Two tools run the entire length of the assembly line and hold everything together — one behind the scenes, one in front. Every step below plugs into both.</p>
+  <div class="spinediagram">
+    <div class="spinecard back">
+      <h4>⚙️ <a href="https://n8n.io" target="_blank" rel="noopener">n8n</a> — the backend spine</h4>
+      <div class="role">The conductor · behind the scenes</div>
+      <p>n8n is the deterministic backbone. It kicks off every step in order, hands work to the right AI or tool at each stage, waits at the checkpoints, and moves the video down the line — the same way, every time. Think of it as the conveyor belt itself. The individual steps do clever, probabilistic things (an AI deciding where a graphic goes); n8n is the rigid, reliable frame that carries them in the right order from raw footage all the way to publish.</p>
+    </div>
+    <div class="spinecard front">
+      <h4>📋 <a href="https://airtable.com" target="_blank" rel="noopener">Airtable</a> — the frontend spine</h4>
+      <div class="role">The dashboard · what you see &amp; touch</div>
+      <p>Airtable is the human-facing backbone. Every video is a row; every column shows what stage it's at and holds the raw ingredients to review. It's also where <i>all</i> your approvals happen. You never build or open a custom app — you just watch the board and click approve. This is what you meant on the call by "n8n plus a spreadsheet is basically <a href="https://clay.com" target="_blank" rel="noopener">Clay</a>, minus the cost." (<a href="https://www.notion.so" target="_blank" rel="noopener">Notion</a> works exactly the same way if you'd rather use that — pick whichever you live in.)</p>
+    </div>
+  </div>
+  <p style="margin-top:14px">In the assembly line below, you'll see these two as colored rails running down both sides — <span style="color:var(--n8n);font-weight:600">n8n on the left (driving each step)</span> and <span style="color:var(--air);font-weight:600">Airtable on the right (showing status &amp; holding approvals)</span>. The steps live between them because they're literally held up by both.</p>
+
+  <!-- ===== GOALS ===== -->
+  <h2 id="goals"><span class="n">3</span>What we're building, and why</h2>
+  <div class="grid">
+    <div class="card">
+      <h4>🎬 The content problem (Scott)</h4>
+      <p>Videos currently ship at "40% quality" and post-production is the bottleneck. The target look is the case-study channel Scott showed on the call: short, punchy, value-packed videos with branded graphics on screen, animated text, and B-roll — the channel that went from zero to 9,500 subscribers with just 31 videos in about four months.</p>
+      <p>Scott keeps owning the scripting and the storytelling. ZeroCut owns everything that happens after he stops recording.</p>
+    </div>
+    <div class="card">
+      <h4>📈 The business logic (from the call)</h4>
+      <p>Organic content feeds the paid ads engine, and organic video + AI search is the highest-leverage marketing there is — the thing that takes QS toward $1M/month. Down the road, this same system could be offered to clients as its own business.</p>
+      <p>Target: 2–4 videos a week flowing through, at 5–10× the editing speed of doing it by hand. Shorts come out of the same machine for free.</p>
+    </div>
+  </div>
+
+  <!-- ===== KEPT ===== -->
+  <h2 id="kept"><span class="n">4</span>What we kept from the call — your thinking that held up</h2>
+  <p>Before the changes, credit where it's due: most of the architecture you sketched on the call survived the pressure test intact. These are the load-bearing ideas we kept exactly as you framed them.</p>
+  <div class="grid">
+    <div class="card">
+      <h4><span class="pill keep">KEPT</span> &nbsp;The conveyor-belt model</h4>
+      <p>Your framing — a video moving "down the conveyor belt of each step, each node" — is literally the shape of the whole system. That's the assembly line below.</p>
+    </div>
+    <div class="card">
+      <h4><span class="pill keep">KEPT</span> &nbsp;Deterministic spine, smart nodes</h4>
+      <p>Your exact point: the workflow between steps should be rigid and repeatable, while the AI does the clever, probabilistic work <i>inside</i> each step. That's why n8n is the spine and the models live in the nodes.</p>
+    </div>
+    <div class="card">
+      <h4><span class="pill keep">KEPT</span> &nbsp;The transcript is the master reference</h4>
+      <p>You landed on the transcript being the thing everything hangs off — cuts, graphics, timing all reference it. That became the recipe. Strongest idea in the call.</p>
+    </div>
+    <div class="card">
+      <h4><span class="pill keep">KEPT</span> &nbsp;Human gates at the right spots</h4>
+      <p>You co-designed roughly five human checkpoints — transcript, cutting, animation ideas, final. We kept the checkpoints; we just made most of them fall away over time as trust builds.</p>
+    </div>
+    <div class="card">
+      <h4><span class="pill keep">KEPT</span> &nbsp;Rent the frontend, don't build one</h4>
+      <p>Your call: no custom app — a spreadsheet frontend (Airtable/Notion) is more than enough, and pairing it with n8n gives you Clay without the Clay bill. Kept as the frontend spine.</p>
+    </div>
+    <div class="card">
+      <h4><span class="pill keep">KEPT</span> &nbsp;Understand it before automating it</h4>
+      <p>Your principle — you should know how to do the job by hand before you automate it, or it turns to slop. Scott's already done the manual steps, so we're clear to build.</p>
+    </div>
+    <div class="card">
+      <h4><span class="pill keep">KEPT</span> &nbsp;Always adversarially test the AI</h4>
+      <p>Your point that AI feels like an expert on everything except what you actually know well — so its first draft is usually flawed, and something (a human or another agent) has to catch it. That's baked into every checkpoint.</p>
+    </div>
+    <div class="card">
+      <h4><span class="pill keep">KEPT</span> &nbsp;Organic feeds paid; build it AI-first</h4>
+      <p>The whole strategic frame — organic assets get recycled into paid, so build the AI-native version now rather than hiring a human to do it manually. Unchanged.</p>
+    </div>
+  </div>
+
+  <!-- ===== CHANGES ===== -->
+  <h2 id="changes"><span class="n">5</span>What changed since the call — and why</h2>
+  <p>Four things changed in important ways once the plan got stress-tested:</p>
+  <table>
+    <tr><th style="width:28%">On the call we said…</th><th style="width:10%"></th><th>What we're actually doing, and why</th></tr>
+    <tr>
+      <td><b>"<a href="https://www.adobe.com/products/premiere.html" target="_blank" rel="noopener">Adobe Premiere</a>'s MCP will assemble the video"</b> — the AI drives Premiere to plug all the ingredients in.</td>
+      <td><span class="pill warn">CHANGED</span></td>
+      <td>Those Premiere remote-controls do exist — but they're hobby-grade, need Premiere open on a desktop, and they're an AI puppeting a fragile app. Fine for a human sitting there; wrong for a machine that must work unattended every time. Instead, a proper video-rendering tool (<a href="https://www.remotion.dev" target="_blank" rel="noopener">Remotion</a>) cooks the video directly from the recipe. Premiere stays around only as a break-glass option for the rare video that needs real hand-craft.</td>
+    </tr>
+    <tr>
+      <td><b>"The Mac Studio runs a video AI (<a href="https://github.com/Lightricks/LTX-Video" target="_blank" rel="noopener">LTX</a>) to make the animations."</b></td>
+      <td><span class="pill dead">MOSTLY KILLED</span></td>
+      <td>The thing we got wrong: look closely at the channel we admire — those aren't AI-generated videos, they're <b>motion graphics</b>: branded charts, animated text, clean diagrams. AI video generators make dreamy realistic footage; they <i>cannot</i> make crisp on-brand graphics with readable text, and they never produce the same thing twice. The right tool is a small library of <b>reusable branded templates</b> — designed once, then filled in automatically per video. Same look every time, instant, free. The Mac Studio still earns its keep doing the rendering and the occasional genuinely-AI B-roll shot.</td>
+    </tr>
+    <tr>
+      <td><b>"We'll build the transcript-cutting step ourselves."</b></td>
+      <td><span class="pill warn">BUY INSTEAD</span></td>
+      <td>Cutting out silences, "ums," and bad takes from a transcript is a solved problem — a $20/month tool called <a href="https://gling.ai" target="_blank" rel="noopener">Gling</a> does exactly this today. Building it would burn two weeks recreating something we can rent. The custom stuff worth building is what nobody sells: the design brain, the brand templates, and the learning loop.</td>
+    </tr>
+    <tr>
+      <td><b>"AI reads the transcript and decides where the animations go."</b></td>
+      <td><span class="pill warn">UPGRADED</span></td>
+      <td>A transcript tells you what was said — not <i>how</i>. Great editing syncs graphics to the delivery: the pause before the punchline, the emphasis on a number, the beat of the music. So the system now also listens to the audio itself (where the pauses are, where the voice punches, where the music beats fall) and a simple timing rule nudges every graphic onto those natural moments. The AI decides <b>what</b> goes <b>where</b>; the audio decides exactly <b>when</b>. Without this, every graphic lands technically-correct but half a second emotionally off.</td>
+    </tr>
+    <tr>
+      <td><b>"Maybe you don't need a human in the loop at the end."</b></td>
+      <td><span class="pill warn">REVERSED</span></td>
+      <td>Flipped it: the early checkpoints are training wheels that come off as the machine proves itself — but the <b>final watch-through never goes away</b>. A human always watches the finished video before it publishes. Everything else earns trust; that one is forever.</td>
+    </tr>
+    <tr>
+      <td><b>(Not discussed on the call)</b> — what happens after publishing.</td>
+      <td><span class="pill ok">ADDED</span></td>
+      <td>The biggest addition. YouTube hands us, for free, the exact second viewers leave every video and which thumbnail wins an A/B test. That data now flows back into the system: retention dips tune the scripting, thumbnail results tune the thumbnails, timing complaints tune the timing rules. <b>This loop is the thing competitors can't copy</b> — anyone can automate editing; nobody else has your accumulating data about what your audience actually watches.</td>
+    </tr>
+  </table>
+
+  <!-- ===== FLOW ===== -->
+  <h2 id="flow"><span class="n">6</span>The assembly line — start to finish</h2>
+  <p>Read top to bottom — a video flows down the middle. The <span style="color:var(--n8n);font-weight:600">red rail on the left is n8n</span> driving every step; the <span style="color:var(--air);font-weight:600">green rail on the right is Airtable</span> showing status and holding your approvals. Colored cards are machine work; amber boxes are the only moments a human is needed.</p>
+  <div class="legend">
+    <span class="lg"><span class="dot" style="background:var(--auto)"></span>Machine — automated</span>
+    <span class="lg"><span class="dot" style="background:var(--ai)"></span>AI making creative suggestions</span>
+    <span class="lg"><span class="dot" style="background:var(--code)"></span>Plain code — same result every time</span>
+    <span class="lg"><span class="dot" style="background:var(--human)"></span>🧍 Human checkpoint</span>
+  </div>
+
+  <div class="spine-mobile"><span>⚙️ <b>n8n</b> drives every step (backend spine)</span> · <span>📋 <b>Airtable</b> shows status &amp; holds every approval (frontend spine)</span></div>
+
+  <div class="assembly">
+    <!-- LEFT SPINE: n8n -->
+    <div class="spine back"><div class="snodes"></div><div class="slabel">⚙️ n8n · orchestration backbone</div></div>
+
+    <!-- MIDDLE TRACK -->
+    <div class="track">
+
+      <div class="stage auto"><span class="tag auto">MACHINE</span>
+        <h4>Step 0 · Drop the footage in — and n8n takes over</h4>
+        <p class="what"><b>What happens:</b> Scott finishes recording and drags the raw video plus his script into a folder. That's his whole job here — about 2 minutes. From this instant, <b>n8n is in control</b>: it notices the new file, creates a fresh recipe for this video, adds a row to the Airtable board, and starts walking the video through every step that follows — waiting at each checkpoint for a human, then carrying on. It is the spine that connects Step 0 all the way to publish.</p>
+        <div class="spinetouch"><span class="st n8n">⚙️ n8n starts the run</span><span class="st air">📋 Airtable row created</span></div>
+        <div class="tools">
+          <span class="t"><b><a href="https://n8n.io" target="_blank" rel="noopener">n8n</a></b> — the conductor of the whole assembly line. A free, self-hosted automation tool (running on Scott's Mac Studio) that watches for work, kicks off each step in order, and waits at checkpoints. Think Zapier, but self-hosted and free — and here it runs the entire pipeline, not just Step 0.</span>
+          <span class="t"><b><a href="https://airtable.com" target="_blank" rel="noopener">Airtable</a></b> — the tracking board. A spreadsheet-on-steroids where every row is a video and the columns show what stage it's at. Also where all approvals happen. (<a href="https://www.notion.so" target="_blank" rel="noopener">Notion</a> works identically.)</span>
+        </div>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="stage auto"><span class="tag auto">MACHINE</span>
+        <h4>Step 1 · Listen to the recording</h4>
+        <p class="what"><b>What happens:</b> the machine transcribes the video word by word, noting the exact moment each word is spoken. Then it listens a second time for the <i>performance</i>: where Scott pauses, where his voice gets louder, which words he punches. All of it goes into the recipe.</p>
+        <div class="why">The transcript alone tells us what was said. The pauses and emphasis tell us <b>how</b> it was said — and that's what everything downstream syncs to. This is what makes the graphics later land on the natural rhythm of the delivery instead of feeling pasted on.</div>
+        <div class="spinetouch"><span class="st n8n">⚙️ n8n runs this step</span><span class="st air">📋 status → "transcribed"</span></div>
+        <div class="tools">
+          <span class="t"><b><a href="https://github.com/m-bain/whisperX" target="_blank" rel="noopener">WhisperX</a></b> — free speech-to-text that runs on the Mac (nothing leaves the machine). Its specialty: it timestamps every single word, the backbone of the whole recipe.</span>
+          <span class="t"><b><a href="https://librosa.org" target="_blank" rel="noopener">librosa</a></b> — a free audio-analysis library. It doesn't understand words; it measures sound — where the silences are, where the volume spikes. Cheap, instant, same answer every time.</span>
+        </div>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="stage auto"><span class="tag auto">MACHINE</span>
+        <h4>Step 2 · The rough cut</h4>
+        <p class="what"><b>What happens:</b> all the "ums," long silences, false starts, and repeated takes get stripped out automatically, leaving a clean version of the talk. The machine then renders a quick low-quality preview — just good enough to check the cuts.</p>
+        <div class="why">This is the most tedious part of manual editing — and it's a solved problem we can rent for $20/month instead of building. Getting the retakes out <i>first</i> also means every later step works from the clean version of what was actually said.</div>
+        <div class="spinetouch"><span class="st n8n">⚙️ n8n sends footage to Gling, gets timeline back</span><span class="st air">📋 preview attached to the row</span></div>
+        <div class="tools">
+          <span class="t"><b><a href="https://gling.ai" target="_blank" rel="noopener">Gling</a></b> — a service built for exactly this: feed it raw talking-head footage, it removes silences, fillers, and bad takes. $20/month.</span>
+          <span class="t"><b><a href="https://ffmpeg.org" target="_blank" rel="noopener">FFmpeg</a></b> — the free Swiss-army knife of video. Here it just stitches a fast preview so a human can check the cut without waiting for a full render.</span>
+        </div>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="gate">
+        <div class="ico">🧍</div>
+        <div>
+          <h5>Checkpoint A — "Did it cut the right things?"</h5>
+          <p><b>Who:</b> Scott (or the editor). <b>Where:</b> in Airtable. <b>Time:</b> 5–10 minutes. Skim the preview and flag anything wrong: "restore this bit," "trim that." Fixes go into the recipe and a new preview appears in minutes. Passing this also confirms the transcript is right, so there's no separate transcript check.</p>
+          <span class="collapse">⏳ Training wheels: once 10 videos in a row sail through nearly untouched, this checkpoint switches off.</span>
+        </div>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="stage ai"><span class="tag ai">AI SUGGESTS</span>
+        <h4>Step 3 · The design brain proposes the edit</h4>
+        <p class="what"><b>What happens:</b> Claude reads the clean transcript — including the pause and emphasis markers from Step 1 — plus the catalog of brand templates and the sound-effects library. It then writes a <b>proposal list</b>: "put the revenue-counter graphic on the phrase 'two million dollars'… show a checklist graphic while he lists the three steps… B-roll here… this whoosh sound there… use this music track… and these two segments would make great shorts." Each suggestion says which template, with what text, anchored to which words.</p>
+        <div class="why">This is the creative judgment step — the one thing that genuinely needs AI. But notice what it produces: <b>a list of suggestions, not a video.</b> A list is cheap to review, edit, and reject line by line. A rendered video is expensive to redo. The AI proposes; it doesn't decide. And it deliberately does NOT set exact timing — that comes next, and it's not an AI job.</div>
+        <div class="spinetouch"><span class="st n8n">⚙️ n8n calls Claude, writes proposals to the recipe</span><span class="st air">📋 proposals appear as rows to approve</span></div>
+        <div class="tools">
+          <span class="t"><b><a href="https://claude.com" target="_blank" rel="noopener">Claude</a></b> — reads the annotated transcript and proposes the creative plan. Costs roughly $1–3 per video.</span>
+          <span class="t"><b><a href="https://www.epidemicsound.com" target="_blank" rel="noopener">Epidemic Sound</a></b> (or similar) — a music and sound-effects subscription (~$15–30/mo). Sounds are always <i>picked</i> from this library, never AI-generated — picking from a good library is more reliable than generating, every time.</span>
+        </div>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="gate">
+        <div class="ico">🧍</div>
+        <div>
+          <h5>Checkpoint B — "Do I like the plan?"</h5>
+          <p><b>Who:</b> Scott. <b>Where:</b> in Airtable (works fine on a phone). <b>Time:</b> 10–15 minutes. Every suggestion is a row: approve it, tweak the wording, or reject it. Music choice included. This is the highest-leverage 15 minutes in the whole process — you're steering the creative direction of the video before a single expensive thing gets made.</p>
+          <span class="collapse">⏳ Training wheels: once the AI is getting >90% of proposals approved, this drops to spot-checks.</span>
+        </div>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="stage code"><span class="tag code">PLAIN CODE</span>
+        <h4>Step 3½ · Snap everything to the rhythm</h4>
+        <p class="what"><b>What happens:</b> a simple timing rule goes through every approved suggestion and nudges it onto the nearest natural moment: text graphics land in the breath <i>after</i> the key word (never mid-word), sound effects hit exactly on a music beat, B-roll cuts on pauses or downbeats, and reveals land on the dramatic pause <i>before</i> the payoff line.</p>
+        <div class="why">This is what separates an edit that feels alive from one that feels off. A graphic that appears while Scott is still mid-word feels wrong even if nobody can say why. And crucially, this is <b>not</b> an AI decision — it's a measurable rule ("move to the nearest beat") that behaves identically every time. If the timing ever feels off across several videos, we adjust the rule once and every future video inherits the fix.</div>
+        <div class="spinetouch"><span class="st n8n">⚙️ n8n runs the snap, no human needed</span></div>
+        <div class="tools">
+          <span class="t"><b>Plain code</b> — a lookup, not a model. The timing rules live in one config file we tune over time.</span>
+        </div>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="stage auto"><span class="tag auto">MACHINE</span>
+        <h4>Step 4 · Make the graphics</h4>
+        <p class="what"><b>What happens:</b> the approved suggestions get turned into actual visual assets. About 90% come from the <b>brand template library</b> — pre-designed animated graphics (a stat counter, a title card, a checklist, a quote card, a chart) that get filled in with this video's text and numbers. Identical brand look every time, generated instantly. The rare shot that genuinely needs AI-generated footage gets queued on the Mac Studio.</p>
+        <div class="why">This is the correction of the biggest wrong turn from the call. The channel we're modeling doesn't use AI-generated video — it uses a consistent set of branded motion graphics. Templates give us exactly that: designed once by a pro, reused forever, always on-brand, always legible. <b>The template library is arguably the most valuable single asset in this whole system</b> — it literally is the channel's visual identity.</div>
+        <div class="spinetouch"><span class="st n8n">⚙️ n8n renders templates, queues any AI shots</span><span class="st air">📋 assets attach to the row</span></div>
+        <div class="tools">
+          <span class="t"><b><a href="https://www.remotion.dev" target="_blank" rel="noopener">Remotion</a></b> — free tool where animated graphics are defined like code templates with blanks to fill ("headline goes here, number goes there"). Fill the blanks, get the finished animation.</span>
+          <span class="t"><b><a href="https://www.adobe.com/products/aftereffects.html" target="_blank" rel="noopener">After Effects</a></b> — where a motion designer authors the master templates in the first place (one-time work).</span>
+          <span class="t"><b><a href="https://github.com/Lightricks/LTX-Video" target="_blank" rel="noopener">LTX</a></b> — a free AI video generator running locally on the Mac Studio, for the occasional genuinely-generative B-roll shot. A bit part, not the star.</span>
+        </div>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="gate">
+        <div class="ico">🧍</div>
+        <div>
+          <h5>Checkpoint C — "Do the AI shots look right?"</h5>
+          <p><b>Who:</b> Scott. <b>Where:</b> in Airtable. <b>Time:</b> ~2 minutes, only when AI-generated shots exist. They show up as a grid of thumbnails: approve, regenerate, or swap for a template. Template graphics skip this entirely — they can't surprise you, so there's nothing to check.</p>
+          <span class="collapse">⏳ Only fires on videos that actually use generative shots.</span>
+        </div>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="stage code"><span class="tag code">PLAIN CODE</span>
+        <h4>Step 5 · Cook the video</h4>
+        <p class="what"><b>What happens:</b> the machine takes the completed recipe — footage, cuts, graphics, music, sound effects, all with exact timings — and renders the finished video. The same recipe always produces the same video. Shorts get cooked from the same recipe: the approved highlight segments are re-framed vertical and rendered alongside.</p>
+        <div class="why">Because this is pure execution of an approved recipe — zero judgment involved — it needs no checkpoint and can never "go rogue." This step is also why nobody edits timelines anymore: the video is <i>always</i> re-creatable from the recipe in minutes, so changes are safe, repeatable, and never lost.</div>
+        <div class="spinetouch"><span class="st n8n">⚙️ n8n triggers the render on the Mac Studio</span><span class="st air">📋 status → "rendered"</span></div>
+        <div class="tools">
+          <span class="t"><b><a href="https://www.remotion.dev" target="_blank" rel="noopener">Remotion</a></b> — the one and only renderer. Runs on the Mac Studio.</span>
+        </div>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="gate permanent">
+        <div class="ico">🧍</div>
+        <div>
+          <h5>Checkpoint D — the final watch-through <span class="pill ok" style="background:rgba(251,191,36,.15);color:var(--human)">PERMANENT</span></h5>
+          <p><b>Who:</b> the editor — in his new role. <b>Where:</b> in Airtable. He watches the finished video like a viewer would and leaves timestamped notes: "cut at 3:12 feels early," "that overlay covers his face," "sound effect too loud." Each note updates the recipe, the machine re-cooks in minutes, he re-checks. When it's right, he approves — and the recipe locks.</p>
+          <p><b>The compounding rule:</b> if the same kind of note keeps coming up across videos, that's not a video problem — it's a rule or template problem. We fix the template or the timing rule <i>once</i>, and every future video comes out already fixed. This is how the machine literally gets better every week.</p>
+          <p>This checkpoint never switches off. Every other checkpoint is training wheels; a human watching the final video before the world does is forever.</p>
+        </div>
+      </div>
+
+      <div class="eject">
+        <h5>⏏ The escape hatch (rare, one-way)</h5>
+        <p>Occasionally a video will need real hand-craft the recipe can't express. For those: the system exports a normal <a href="https://www.adobe.com/products/premiere.html" target="_blank" rel="noopener">Premiere</a> project <b>once</b>, the editor finishes it by hand, and that video permanently leaves the assembly line — its recipe is frozen and never re-cooked (otherwise the machine would overwrite his handiwork). <b>The health metric:</b> if more than 1 in 5 videos needs the escape hatch, the template library is too weak — we fix the library, not the videos.</p>
+      </div>
+      <div class="conn"><div class="line"></div><div class="arr">▼</div></div>
+
+      <div class="stage auto"><span class="tag auto">MACHINE</span>
+        <h4>Step 6 · Publish — and learn</h4>
+        <p class="what"><b>What happens:</b> the video and its shorts upload to YouTube automatically (Scott just confirms title and description — 2 minutes). Up to three thumbnail versions go into YouTube's built-in A/B test. Then, every night, the system pulls the numbers back: the exact retention curve (the second-by-second graph of when viewers leave) and which thumbnail is winning.</p>
+        <div class="why">This is the step that was completely missing from the original plan, and it's the whole ballgame. The retention data gets lined up against the recipe — "viewers bailed at 3:12, which was a 40-second stretch with no B-roll" — and those findings feed back into Scott's scripting, the design brain's choices, and the timing rules. <b>Every video published makes the next one better.</b> Anyone can copy an automation; nobody can copy months of your audience's behavior data wired into your machine.</div>
+        <div class="spinetouch"><span class="st n8n">⚙️ n8n uploads + pulls analytics nightly</span><span class="st air">📋 performance saved back to the row</span></div>
+        <div class="tools">
+          <span class="t"><b><a href="https://developers.google.com/youtube/v3" target="_blank" rel="noopener">YouTube Data API</a></b> + <b><a href="https://developers.google.com/youtube/analytics" target="_blank" rel="noopener">Analytics API</a></b> — free. One uploads and runs thumbnail A/B tests; the other hands back retention and click-through data.</span>
+          <span class="t"><b><a href="https://app.pixels.com" target="_blank" rel="noopener">Pixels.app</a></b> — the thumbnail generator Scott already uses. Stays manual for now (his call, and the right one — it barely takes time). The only new wiring: A/B results get saved so the thumbnail style choices become data-driven.</span>
+          <span class="t"><b><a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a></b> — the free database where every recipe and every performance number lives. It's the system's memory behind Airtable.</span>
+        </div>
+      </div>
+
+      <div class="loopback">
+        <div class="ico">🔁</div>
+        <p><b>…and back to the top.</b> The learning from Step 6 flows into the next video's script, design proposals, and timing rules. The assembly line isn't just fast — it's compounding.</p>
+      </div>
+
+    </div>
+
+    <!-- RIGHT SPINE: Airtable -->
+    <div class="spine front"><div class="snodes"></div><div class="slabel">📋 Airtable · status &amp; approvals</div></div>
+  </div>
+
+  <!-- ===== PEOPLE ===== -->
+  <h2 id="people"><span class="n">7</span>Who does what</h2>
+  <table>
+    <tr><th style="width:20%">Person</th><th>Role in ZeroCut</th><th style="width:22%">Time per video</th></tr>
+    <tr><td><b>Scott</b></td><td>Records, drops footage in (Step 0), approves the creative plan (Checkpoint B), glances at AI shots (Checkpoint C), confirms publish. Owns scripting and the channel strategy — the machine never touches those.</td><td>~20–30 min, mostly Checkpoint B</td></tr>
+    <tr><td><b>The editor</b></td><td><b>New role — this needs an explicit conversation.</b> He becomes the quality reviewer: watches finished renders and writes notes (Checkpoint D). He does <i>not</i> open Premiere day-to-day — only for escape-hatch videos, where he does full hand-craft. His polish instincts get channeled into improving the templates, where a fix helps every future video instead of one.</td><td>~20–40 min watch-through + notes</td></tr>
+    <tr><td><b>Lloyd</b></td><td>Architecture, the build itself, and keeping the system honest (the health metrics: escape-hatch rate, checkpoint queue times, template fix log).</td><td>Build phase, then oversight</td></tr>
+    <tr><td><b>A motion designer</b></td><td>One-time engagement: designs the 5 core brand templates to a professional standard. Likely the highest-ROI dollars in the whole build, because those templates ARE the channel's look.</td><td>One-time</td></tr>
+  </table>
+
+  <!-- ===== TOOLS ===== -->
+  <h2 id="tools"><span class="n">8</span>The tools, in one table</h2>
+  <table>
+    <tr><th style="width:20%">Tool</th><th>What it actually is</th><th style="width:14%">Cost</th></tr>
+    <tr><td><b><a href="https://n8n.io" target="_blank" rel="noopener">n8n</a></b> <span style="color:var(--n8n)">◆ backend spine</span></td><td>The conductor. Free automation software on the Mac Studio that moves every video through the steps and waits at checkpoints — the backbone of the whole pipeline.</td><td>free</td></tr>
+    <tr><td><b><a href="https://airtable.com" target="_blank" rel="noopener">Airtable</a></b> <span style="color:var(--air)">◆ frontend spine</span></td><td>The tracking board and approval surface — every video is a row, every checkpoint happens there. No custom app needed. (<a href="https://www.notion.so" target="_blank" rel="noopener">Notion</a> is an equivalent swap.)</td><td>~$20/mo</td></tr>
+    <tr><td><b><a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a></b></td><td>The memory. Database holding every recipe and all performance data behind Airtable.</td><td>~free</td></tr>
+    <tr><td><b><a href="https://github.com/m-bain/whisperX" target="_blank" rel="noopener">WhisperX</a></b></td><td>Speech-to-text on the Mac; timestamps every word.</td><td>free</td></tr>
+    <tr><td><b><a href="https://librosa.org" target="_blank" rel="noopener">librosa</a></b></td><td>Audio analysis: finds the pauses, emphasis, and music beats everything syncs to.</td><td>free</td></tr>
+    <tr><td><b><a href="https://gling.ai" target="_blank" rel="noopener">Gling</a></b></td><td>Rented rough-cutter: removes silences, "ums," and bad takes.</td><td>$20/mo</td></tr>
+    <tr><td><b><a href="https://claude.com" target="_blank" rel="noopener">Claude</a></b></td><td>The design brain: reads the transcript + delivery markers, proposes the creative plan.</td><td>~$1–3/video</td></tr>
+    <tr><td><b><a href="https://www.remotion.dev" target="_blank" rel="noopener">Remotion</a></b></td><td>The kitchen: fill-in-the-blanks animated graphics + the one renderer that cooks every final video.</td><td>free</td></tr>
+    <tr><td><b><a href="https://www.adobe.com/products/aftereffects.html" target="_blank" rel="noopener">After Effects</a></b></td><td>Where the master templates get designed (one-time).</td><td>CC sub</td></tr>
+    <tr><td><b><a href="https://github.com/Lightricks/LTX-Video" target="_blank" rel="noopener">LTX</a></b></td><td>Local AI video generator on the Mac Studio for the rare truly-generative shot.</td><td>free</td></tr>
+    <tr><td><b><a href="https://www.epidemicsound.com" target="_blank" rel="noopener">Epidemic Sound</a></b></td><td>Music + sound-effects subscription. Sounds are picked, never generated.</td><td>~$15–30/mo</td></tr>
+    <tr><td><b><a href="https://developers.google.com/youtube/v3" target="_blank" rel="noopener">YouTube APIs</a></b></td><td>Auto-publish, thumbnail A/B tests, and the retention data that powers the learning loop.</td><td>free</td></tr>
+    <tr><td><b><a href="https://app.pixels.com" target="_blank" rel="noopener">Pixels.app</a></b></td><td>Scott's thumbnail generator. Stays manual for now.</td><td>API pricing</td></tr>
+    <tr><td><b><a href="https://www.adobe.com/products/premiere.html" target="_blank" rel="noopener">Premiere Pro</a></b></td><td>Escape hatch only — hand-craft on the rare ejected video.</td><td>CC sub</td></tr>
+  </table>
+  <p style="margin-top:12px"><b>Total running cost: roughly $60–80/month plus ~$2 of AI per video.</b> The Mac Studio does the heavy lifting locally, which is exactly the job Scott bought it for — rendering and the odd AI shot, not (as originally planned) generating all the graphics.</p>
+
+  <!-- ===== BUILD ===== -->
+  <h2 id="build"><span class="n">9</span>The build plan — about a month, in the right order</h2>
+  <p>The counterintuitive rule: <b>build the cooking before the thinking.</b> If the renderer can't produce a video that looks good, no amount of AI on top matters — so we prove that first, with a recipe written by hand. And through all of it: <b>publishing never pauses for the build.</b></p>
+  <div class="weeks">
+    <div class="week"><div class="w">WEEK 1</div><p><b>Prove the kitchen.</b> Hand-write a recipe for a video that's already published, have Remotion cook it, and compare it side-by-side with the human-edited original. Also: run one real video through Gling ($20 experiment). <b>If the render isn't within striking distance of the human edit, we stop and fix templates before building anything else.</b> Also lock the recipe format — everything depends on it.</p></div>
+    <div class="week"><div class="w">WEEK 2</div><p><b>Build the look.</b> The 5 core brand templates, professionally designed, with their timing rules. Plus the listening step (transcription + audio analysis).</p></div>
+    <div class="week"><div class="w">WEEK 3</div><p><b>Build the brain.</b> The design pass, the rhythm-snapping rules (tested carefully — this is where subtle timing bugs would hide), the Airtable checkpoints, and timers on every checkpoint so "a video is stuck waiting on a human" shows up as a number, not a surprise.</p></div>
+    <div class="week"><div class="w">WEEK 4</div><p><b>Connect it end-to-end.</b> Full pipeline through publish, with n8n wired as the spine across all steps. <b>The first 10 videos are calibration runs</b> — expect lots of Checkpoint D notes; that's the system being tuned, not failing.</p></div>
+    <div class="week"><div class="w">AFTER</div><p><b>Wire the learning loop.</b> Retention and thumbnail data flowing back automatically. Thumbnail automation waits until the data shows which styles actually win clicks.</p></div>
+  </div>
+
+  <!-- ===== OPEN ===== -->
+  <h2 id="open"><span class="n">10</span>Decisions still open (human calls, not tech ones)</h2>
+  <div class="qbox">
+    <ol>
+      <li><b>The editor conversation.</b> His job changes from "edits videos" to "reviews videos and improves templates." The system only works if he genuinely never opens Premiere on normal videos. Scott needs to have this conversation directly — it's the single biggest human risk in the plan.</li>
+      <li><b>Airtable or Notion?</b> Either works as the frontend spine — pick whichever you already live in. (Doc currently assumes Airtable.)</li>
+      <li><b>Pick the music library.</b> Beat-synced editing needs a known, licensed music track per video (Epidemic Sound or similar). Videos without music still work — graphics sync to pauses instead of beats.</li>
+      <li><b>Hire the template designer.</b> One-time engagement, five templates, professional standard. These templates are the channel's visual identity — worth real money done right.</li>
+    </ol>
+  </div>
+
+  <div class="foot">
+    ZeroCut · Architecture v3 · July 2, 2026 · Source: Lloyd // Scott alignment call (Fireflies 01KVZSSY9EY9AGKJ6DJRWHNG7P), pressure-tested and adversarially reviewed · Machine-readable spec: docs/architecture.md · Repo: lloyd-yip/zerocut
+  </div>
+</div>
+</body>
+</html>
